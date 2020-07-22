@@ -1,0 +1,5 @@
+numpy
+scikit-learn
+shapely
+git+https://github.com/ropod-project/black-box-tools.git#egg=black_box_tools
+git+https://github.com/b-it-bots/action-execution#egg=action_execution
