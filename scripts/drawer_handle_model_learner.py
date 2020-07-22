@@ -69,7 +69,7 @@ def get_label(event_start, event_end):
     return 0
 
 if __name__ == '__main__':
-    log_db_name = 'handle_logs'
+    log_db_name = 'handle_drawer_logs'
 
     event_docs = DBUtils.get_all_docs(log_db_name, 'ros_event')
     event_timestamps = DataUtils.get_all_measurements(event_docs, 'timestamp')
