@@ -1,4 +1,3 @@
-from shapely.geometry import Polygon
 from action_execution.geometry.pose import Pose3
 
 class PullingPredicateLibrary(object):

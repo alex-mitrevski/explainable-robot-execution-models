@@ -1,4 +1,3 @@
-from shapely.geometry import Polygon
 from action_execution.geometry.pose import Pose3
 from action_execution.geometry.bbox import BBox3
 
