@@ -14,9 +14,6 @@ class ActionExecutionModel(object):
     # action preconditions
     preconditions = None
 
-    # action effects
-    effects = None
-
     # Gaussian process regressor
     gpr = None
 
@@ -126,5 +123,6 @@ class ActionExecutionModel(object):
         model = None
         with open(model_file_path, 'rb+') as model_file:
             model = pickle.load(model_file)
+        self.name = model.name
         self.preconditions = model.preconditions
         self.gpr = model.gpr
