@@ -45,7 +45,7 @@ The learning data is stored in a MongoDB database in the format described in our
 
 ## Learning Data
 
-A subset of the recorded data, which is sufficient for learning the models that were used in the experiments in the paper, is provided at [add link].
+A subset of the recorded data, which is sufficient for learning the models that were used in the experiments in the paper, is provided [via Zenodo](https://zenodo.org/record/3968984).
 
 The dataset contains three MongoDB databases - `handle_drawer_logs`, `handle_fridge_logs`, `pull_logs` - corresponding to the experiments for grasping a drawer handle, grasping a fridge handle, and object pulling, respectively.
 
