@@ -81,3 +81,4 @@ Contributions in the form of PRs (for example for adding new action models) as w
 
 * The code in this repository is, in a sense, branched off of [`action-execution`](https://github.com/alex-mitrevski/action-execution), so I may decide to merge the packages at some future point.
 * Related to the previous point, this repository is ongoing work and will be updated over time. The version used for the IROS 2020 experiments is preserved by the [iros2020](https://github.com/alex-mitrevski/explainable-robot-execution-models/releases/tag/iros2020) tag.
+* The component for learning relational preconditions is reused from [my old implementation](https://github.com/alex-mitrevski/delta-execution-models/blob/master/rule_learner/symblearn/stat_learn.py), but includes some bug fixes.
