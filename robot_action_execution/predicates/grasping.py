@@ -1,7 +1,9 @@
 from action_execution.geometry.pose import Pose3
 from action_execution.geometry.bbox import BBox3
 
-class GraspingPredicateLibrary(object):
+from robot_action_execution.predicates.predicate_utils import PredicateLibraryBase
+
+class GraspingPredicateLibrary(PredicateLibraryBase):
     relation_names = ['in_front_of_x', 'behind_x',
                       'in_front_of_y', 'behind_y',
                       'above', 'below', 'centered_along_x',
