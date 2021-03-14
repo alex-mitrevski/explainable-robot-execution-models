@@ -22,6 +22,7 @@ class ActionExecutionModel(object):
 
     def __init__(self, name, model_file_path=None):
         self.name = name
+        self.sample_buffer = []
         if model_file_path:
             self.load(model_file_path)
         else:
@@ -51,6 +52,7 @@ class ActionExecutionModel(object):
             precondition_values = [p[2] for p in self.preconditions]
 
         sample_found = False
+        execution_data = np.array(self.gpr.X_train_)
         value_indices = np.where(self.gpr.y_train_ == value)[0]
         constraints = kwargs.get('constraints', None)
 
@@ -68,13 +70,15 @@ class ActionExecutionModel(object):
 
             constrained_instance = np.array([c if c is not None else 0.
                                              for c in constraints])[np.newaxis]
-            distances, indices = neighbour_tree.kneighbors(constrained_instance)
+            _, indices = neighbour_tree.kneighbors(constrained_instance)
+            execution_data = np.array(self.gpr.X_train_[value_indices])
+            value_indices = indices[0]
 
         while not sample_found:
             # we take a random input from the training set
             # where the function is equal to "value"
             random_state_idx = np.random.choice(value_indices)
-            state = np.array(self.gpr.X_train_[random_state_idx])
+            state = np.array(execution_data[random_state_idx])
 
             # the returned state is sampled from a normal
             # distribution centered at the selected input
