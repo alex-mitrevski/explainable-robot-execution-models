@@ -38,16 +38,22 @@ class GraspingPredicateLibrary(PredicateLibraryBase):
         return pose.position.z < b_box.min.z
 
     @staticmethod
-    def centered_along_x(pose: Pose3, b_box: BBox3) -> bool:
+    def centered_along_x(pose: Pose3, b_box: BBox3, eps: float=0.05) -> bool:
         bbox_center = (b_box.min.x + b_box.max.x) / 2.
-        return abs(pose.position.x - bbox_center) < 0.05
+        return abs(pose.position.x - bbox_center) < eps and \
+               not GraspingPredicateLibrary.behind_x(pose, b_box) and \
+               not GraspingPredicateLibrary.in_front_of_x(pose, b_box)
 
     @staticmethod
-    def centered_along_y(pose: Pose3, b_box: BBox3) -> bool:
+    def centered_along_y(pose: Pose3, b_box: BBox3, eps: float=0.05) -> bool:
         bbox_center = (b_box.min.y + b_box.max.y) / 2.
-        return abs(pose.position.y - bbox_center) < 0.05
+        return abs(pose.position.y - bbox_center) < eps and \
+               not GraspingPredicateLibrary.behind_y(pose, b_box) and \
+               not GraspingPredicateLibrary.in_front_of_y(pose, b_box)
 
     @staticmethod
-    def centered_along_z(pose: Pose3, b_box: BBox3) -> bool:
+    def centered_along_z(pose: Pose3, b_box: BBox3, eps: float=0.05) -> bool:
         bbox_center = (b_box.min.z + b_box.max.z) / 2.
-        return abs(pose.position.z - bbox_center) < 0.05
+        return abs(pose.position.z - bbox_center) < eps and \
+               not GraspingPredicateLibrary.above(pose, b_box) and \
+               not GraspingPredicateLibrary.below(pose, b_box)
