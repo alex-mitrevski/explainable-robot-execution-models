@@ -1,11 +1,16 @@
 import os
 
+from typing import Tuple, Sequence, Callable
+from copy import deepcopy
 import pickle
 import numpy as np
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 from sklearn.neighbors import NearestNeighbors
+
+from robot_action_execution.predicates.predicate_utils import MetaPredicateData, PredicateLibraryBase
+from robot_action_execution.action_execution_model_utils import FailureSearchParams
 
 class ActionExecutionModel(object):
     # action name
@@ -20,8 +25,22 @@ class ActionExecutionModel(object):
     # generated execution samples
     sample_buffer = None
 
-    def __init__(self, name,
-                 model_file_path=None):
+    # min/max limits of the action parameters
+    # (stored as a list of tuples, one entry per parameter)
+    parameter_limits = None
+
+    # parameters used to search for action parameterisations
+    # that make the action fail (search is performed along a
+    # Gaussian distribution with increasing standard deviations)
+    failure_search_params = None
+
+    # a dictionary mapping parameter names (as specified in the
+    # predicate's 'relation_parameter_causes') to parameter indices
+    # as represented by the execution model's Gaussian process
+    parameter_idx_mappings = None
+
+    def __init__(self, name: str,
+                 model_file_path: str=None):
         '''
         Keyword arguments:
         name: str -- name of the action
@@ -49,12 +68,22 @@ class ActionExecutionModel(object):
         '''
         self.sample_buffer = []
 
-    def sample_state(self, value, predicate_library, state_update_fn,
-                     mode=None, use_sample_buffer=True, **kwargs):
+    def sample_state(self, value: int,
+                     predicate_library: PredicateLibraryBase,
+                     state_update_fn: Callable,
+                     mode=None, use_sample_buffer=False, **kwargs):
         '''Returns a state for which the underlying GP equals "value".
 
         Keyword arguments:
         value: int -- function value for which an state should be sampled
+        predicate_library: PredicateLibraryBase -- predicate library class used for defining the
+                                                   preconditions of the action
+        state_update_fn: Callable -- function that predictively applies samples parameters
+                                     so that the preconditions can be verified
+        mode: str -- qualitative mode under which the action is executed (default None)
+        use_sample_buffer: bool -- whether to use a sample buffer, which prevents
+                                   previous samples from being reused - useful
+                                   for backtracking search (default False)
 
         '''
         state = None
@@ -125,7 +154,7 @@ class ActionExecutionModel(object):
             self.sample_buffer.append(state)
         return state
 
-    def save(self, model_file_path):
+    def save(self, model_file_path: str) -> None:
         '''Saves the execution model to the given path (in pickle format).
 
         Keyword arguments:
@@ -136,7 +165,7 @@ class ActionExecutionModel(object):
         with open(model_file_path, 'wb+') as model_file:
             pickle.dump(self, model_file)
 
-    def load(self, model_file_path):
+    def load(self, model_file_path: str) -> None:
         '''Loads an execution model from the given file (in pickle format).
         Raises an AssertionError if the given file does not exits.
 
@@ -155,7 +184,7 @@ class ActionExecutionModel(object):
         self.preconditions = model.preconditions
         self.gpr = model.gpr
 
-    def sample_selected(self, sample):
+    def sample_selected(self, sample: np.ndarray) -> bool:
         '''Returns True if "sample" exists in the buffer of
         generated samples; returns False otherwise.
         '''
@@ -163,3 +192,220 @@ class ActionExecutionModel(object):
             if np.allclose(sample, s):
                 return True
         return False
+
+    def diagnose(self, predicate_library: PredicateLibraryBase,
+                 state_update_fn: Callable,
+                 failure_search_params: FailureSearchParams,
+                 mode: str=None,
+                 **kwargs):
+        '''Looks for diagnosis candidates of a failed action by
+        1. reparameterising the action in the vicinity of the parameters that led to a failure and
+        2. checking if the reparameterisation leads to a violation of any of the preconditions
+
+        The search is performed by varying the action parameters according to a Gaussian distribution
+        (separate distribution for each parameter), such that the standard deviation is increased
+        if a diagnosis candidate is not found within a specified number of samples.
+
+        The search procedure may find multiple diagnosis candidates, but only if they violate
+        the preconditions within the same search layer.
+
+        Keyword arguments:
+        predicate_library: PredicateLibraryBase -- predicate library class used for defining the
+                                                   preconditions of the action
+        state_update_fn: Callable -- function that predictively applies sampled parameters
+                                     so that the preconditions can be verified
+        failure_search_params: FailureSearchParams -- parameters used for guiding the process of
+                                                      searching for failure diagnoses
+        mode: str -- qualitative mode under which the action is executed (default None)
+
+        '''
+        assert failure_search_params is not None, 'failure_search_params cannot be None'
+        search_params = deepcopy(failure_search_params)
+
+        state = None
+        precondition_values = None
+        if mode is not None:
+            precondition_values = [p[2] for p in self.preconditions[mode]]
+        else:
+            precondition_values = [p[2] for p in self.preconditions]
+
+        diagnosis_candidates = []
+        falsifying_state_updates = {}
+        while not diagnosis_candidates:
+            sample_count = 0
+            for sample_count in range(search_params.max_sample_count):
+                state_update = np.zeros(len(search_params.parameter_stds))
+                for i, param_std in enumerate(search_params.parameter_stds):
+                    state_update[i] = np.random.normal(loc=0., scale=param_std)
+
+                updated_state = state_update_fn(state_update, **kwargs)
+
+                if mode is not None:
+                    predicate_values = [int(getattr(predicate_library, precondition[0])(**updated_state))
+                                        for precondition in self.preconditions[mode]]
+                else:
+                    predicate_values = [int(getattr(predicate_library, precondition[0])(**updated_state))
+                                        for precondition in self.preconditions]
+
+                if not np.allclose(precondition_values, predicate_values):
+                    precondition_values = np.array(precondition_values)
+                    predicate_values = np.array(predicate_values)
+                    suspect_indices = np.where(np.abs(precondition_values - predicate_values) > 0)[0]
+
+                    for idx in suspect_indices:
+                        candidate = (self.preconditions[idx][0],
+                                     self.preconditions[idx][1],
+                                     predicate_values[idx])
+                        if candidate not in diagnosis_candidates:
+                            diagnosis_candidates.append(candidate)
+
+                            predicate_name = candidate[0]
+                            disjoint_lists = MetaPredicateData.get_disjoint_predicates(predicate_library,
+                                                                                       predicate_name)
+                            disjoint_diagnoses_count = np.zeros(len(disjoint_lists))
+                            for i, disjoint_predicates in enumerate(disjoint_lists):
+                                disjoint_diagnoses_count[i] = self.count_predicates_in_candidate_list(disjoint_predicates,
+                                                                                                      diagnosis_candidates)
+
+                            # we add the predicate to the list of diagnosis candidates if none of its
+                            # disjoint predicates appear in the list already; otherwise, we don't add
+                            # the predicate and also remove all disjoint predicates from the list of
+                            # current diagnosis candidates;
+                            # we additionally update the dictionary of falsitying state updates
+                            # with a one-hot vector containing the falsifying update of the parameter
+                            # that affects the diagnosis candidate
+                            if not np.any(disjoint_diagnoses_count > 1):
+                                parameter_cause = MetaPredicateData.get_predicate_parameter_cause(predicate_library,
+                                                                                                  candidate[0])
+                                parameter_cause_idx = self.parameter_idx_mappings[parameter_cause]
+                                falsifying_state_updates[parameter_cause_idx] = state_update[parameter_cause_idx]
+                            else:
+                                disjoint_predicate_values = {}
+                                for k in np.where(disjoint_diagnoses_count>1)[0]:
+                                    for p in disjoint_lists[k]:
+                                        for c in diagnosis_candidates:
+                                            if p == c[0]:
+                                                disjoint_predicate_values[p] = c[2]
+                                                break
+
+                                contradicting_values = len(disjoint_predicate_values.keys()) != len(set(disjoint_predicate_values.values()))
+                                if contradicting_values:
+                                    for p in disjoint_predicate_values.keys():
+                                        for c in diagnosis_candidates:
+                                            if p == c[0]:
+                                                diagnosis_candidates.remove(c)
+
+                                                parameter_cause = MetaPredicateData.get_predicate_parameter_cause(predicate_library,
+                                                                                                                  candidate[0])
+                                                parameter_cause_idx = self.parameter_idx_mappings[parameter_cause]
+                                                if parameter_cause_idx in falsifying_state_updates:
+                                                    falsifying_state_updates.pop(parameter_cause_idx)
+                                                break
+                        else:
+                            # if the candidate already exists in the list, we update the falsifying update
+                            # by taking the one with the smaller values since it provides a more fine-grained falsification
+                            parameter_cause = MetaPredicateData.get_predicate_parameter_cause(predicate_library,
+                                                                                              candidate[0])
+                            parameter_cause_idx = self.parameter_idx_mappings[parameter_cause]
+                            if parameter_cause_idx not in falsifying_state_updates:
+                                falsifying_state_updates[parameter_cause_idx] = state_update[parameter_cause_idx]
+                            elif abs(state_update[parameter_cause_idx]) < abs(falsifying_state_updates[parameter_cause_idx]):
+                                falsifying_state_updates[parameter_cause_idx] = state_update[parameter_cause_idx]
+            # if the list of candidates is still empty, we update
+            # the search radii and repeat the search procedure
+            if not diagnosis_candidates:
+                for i, param_std in enumerate(search_params.parameter_stds):
+                    std_delta = (param_std * search_params.range_increase_percentage) / 100.
+                    search_params.parameter_stds[i] = param_std + std_delta
+
+        # the falsifying state update is taken as a sum of the
+        # falsifying updates for the individual parameters
+        falsifying_state_update = np.zeros(len(search_params.parameter_stds))
+        for parameter_idx, update in falsifying_state_updates.items():
+            falsifying_state_update[parameter_idx] = update
+        return (diagnosis_candidates, falsifying_state_update)
+
+    def count_predicates_in_candidate_list(self, predicate_names: Sequence[str],
+                                           diagnosis_candidates: Sequence[Tuple[str, str]]):
+        '''Returns the number of times the predicates in "predicate_names"
+        appear in "diagnosis_candidate".
+
+        Keyword arguments:
+        predicate_names: Sequence[str] -- list of predicate names
+        diagnosis_candidates: Sequence[Tuple[str, str]] -- list of (predicate name, predicate parameters)
+                                                           tuples containing diagnosis candidates
+
+        '''
+        count = 0
+        for p in predicate_names:
+            for candidate in diagnosis_candidates:
+                p_name = candidate
+                if type(candidate) is tuple:
+                    p_name = candidate[0]
+
+                if p == p_name:
+                    count += 1
+        return count
+
+    def get_likely_diagnoses(self, predicate_library: PredicateLibraryBase,
+                             state_update_fn: Callable,
+                             failure_search_params: FailureSearchParams,
+                             mode: str=None,
+                             diagnosis_repetition_count: int=10,
+                             diagnosis_candidate_confidence: float=0.8, **kwargs):
+        '''Runs the diagnosis function (self.diagnose) "diagnosis_repetition_count"
+        times and only keeps the diagnoses whose appearance ratio is larger than
+        "diagnosis_candidate_confidence".
+
+        Returns a tuple (diagnosis_candidates, falsifying_state_update) indicating
+        the likely diagnosis candidates and the state update causing the diagnoses.
+        The falsifying update is calculated as an average of the updates in which
+        the selected diagnosis candidates appear.
+
+        Keyword arguments:
+        predicate_library: PredicateLibraryBase -- predicate library class used
+                                                   for defining the preconditions
+                                                   of the action
+        state_update_fn: Callable -- function that predictively applies sampled parameters
+                                     so that the preconditions can be verified
+        failure_search_params: FailureSearchParams -- parameters used for guiding the
+                                                      process of searching for failure diagnoses
+        mode: str -- qualitative mode under which the action is executed (default None)
+        diagnosis_repetition_count: int -- number of times to generate model violations (default 10)
+        diagnosis_candidate_confidence: float -- confidence value for determining that
+                                                 model violations are likely failure
+                                                 diagnoses (default 0.8)
+
+        '''
+        candidate_update_list = []
+        diagnosis_candidate_counts = {}
+        for _ in range(diagnosis_repetition_count):
+            (diagnosis_candidates, falsifying_state_update) = \
+                self.diagnose(predicate_library, state_update_fn, failure_search_params, mode, **kwargs)
+            candidate_update_list.append((diagnosis_candidates, falsifying_state_update))
+
+            if not diagnosis_candidates:
+                continue
+            for candidate, _, _ in diagnosis_candidates:
+                if not candidate in diagnosis_candidate_counts:
+                    diagnosis_candidate_counts[candidate] = 0
+                diagnosis_candidate_counts[candidate] += 1
+
+        diagnosis_candidates = []
+        falsifying_state_update = np.zeros_like(candidate_update_list[0][1])
+        for candidate, count in diagnosis_candidate_counts.items():
+            if (count / diagnosis_repetition_count) > diagnosis_candidate_confidence:
+                diagnosis_candidates.append(candidate)
+                parameter_updates = []
+                parameter_cause_idx = -1
+                for _, (candidate_list, update) in enumerate(candidate_update_list):
+                    for c, _, _ in candidate_list:
+                        if candidate == c:
+                            parameter_cause = MetaPredicateData.get_predicate_parameter_cause(predicate_library,
+                                                                                              candidate)
+                            parameter_cause_idx = self.parameter_idx_mappings[parameter_cause]
+                            parameter_updates.append(update[parameter_cause_idx])
+                            break
+                falsifying_state_update[parameter_cause_idx] = np.mean(parameter_updates)
+
+        return (diagnosis_candidates, falsifying_state_update)
