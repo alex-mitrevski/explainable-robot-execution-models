@@ -1,3 +1,11 @@
+class PredicateLibraryBase(object):
+    relation_names = None
+
+    relation_parameter_causes = None
+
+    disjoint_predicates = None
+
+
 class MetaPredicateData(object):
     @staticmethod
     def get_predicate_names(predicate_lib):
