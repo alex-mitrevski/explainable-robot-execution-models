@@ -17,6 +17,9 @@ class ActionExecutionModel(object):
     # Gaussian process regressor
     gpr = None
 
+    # generated execution samples
+    sample_buffer = None
+
     def __init__(self, name, model_file_path=None):
         self.name = name
         if model_file_path:
@@ -33,7 +36,7 @@ class ActionExecutionModel(object):
         raise NotImplementedError('learn_success_model needs to be overriden')
 
     def sample_state(self, value, predicate_library, state_update_fn,
-                     mode=None, **kwargs):
+                     mode=None, use_sample_buffer=True, **kwargs):
         '''Returns a state for which the underlying GP equals "value".
 
         Keyword arguments:
@@ -48,14 +51,14 @@ class ActionExecutionModel(object):
             precondition_values = [p[2] for p in self.preconditions]
 
         sample_found = False
-        value_indices = np.where(self.gpr.y_train_==value)[0]
+        value_indices = np.where(self.gpr.y_train_ == value)[0]
         constraints = kwargs.get('constraints', None)
 
         if constraints:
             non_constrained_param_idx = [i for i, cx in enumerate(constraints)
                                          if cx is None]
             constrained_training_data = np.array(self.gpr.X_train_[value_indices])
-            constrained_training_data[:,non_constrained_param_idx] = 0.
+            constrained_training_data[:, non_constrained_param_idx] = 0.
 
             n_neighbours = int(self.gpr.X_train_.shape[0] * 0.1)
             n_neighbours = n_neighbours if n_neighbours < constrained_training_data.shape[0] \
@@ -77,8 +80,13 @@ class ActionExecutionModel(object):
             # distribution centered at the selected input
             # and with a standard deviation equal to
             # the GP standard deviation at that point
-            _, std = self.gpr.predict(state.reshape(1,-1), return_std=True)
+            _, std = self.gpr.predict(state.reshape(1, -1), return_std=True)
             state = np.random.normal(state, std)
+
+            # we skip the sample if it has been selected before;
+            # this allows trying different action parameterisations
+            if use_sample_buffer and self.sample_selected(state): continue
+
             updated_state = state_update_fn(state, **kwargs)
 
             if mode is not None:
@@ -95,6 +103,9 @@ class ActionExecutionModel(object):
             for i, c in enumerate(constraints):
                 if c is not None:
                     state[i] = constraints[i]
+
+        if use_sample_buffer:
+            self.sample_buffer.append(state)
         return state
 
     def save(self, model_file_path):
@@ -126,3 +137,12 @@ class ActionExecutionModel(object):
         self.name = model.name
         self.preconditions = model.preconditions
         self.gpr = model.gpr
+
+    def sample_selected(self, sample):
+        '''Returns True if "sample" exists in the buffer of
+        generated samples; returns False otherwise.
+        '''
+        for s in self.sample_buffer:
+            if np.allclose(sample, s):
+                return True
+        return False
