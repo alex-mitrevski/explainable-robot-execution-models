@@ -409,3 +409,96 @@ class ActionExecutionModel(object):
                 falsifying_state_update[parameter_cause_idx] = np.mean(parameter_updates)
 
         return (diagnosis_candidates, falsifying_state_update)
+
+    def correct_failed_experience(self, predicate_library: PredicateLibraryBase,
+                                  state_update_fn: Callable,
+                                  failure_search_params: FailureSearchParams,
+                                  mode: str=None,
+                                  diagnosis_repetition_count=10,
+                                  diagnosis_candidate_confidence=0.8,
+                                  correction_sample_count:int =1000, **kwargs):
+        '''Suggests a correction of action execution parameters that will make the
+        preconditions true under the given qualitative mode. A correction is made by
+        1. finding diagnosis candidates of the parameterisation (using self.get_likely_diagnoses) and
+        2. suggesting different values for the candidates that are more likely to lead to execution success
+
+        This requires knowledge of which relations are affected by the individual
+        action parameters, as parameters that do not affect the diagnosis candidate
+        relation should not be changed.
+
+        Keyword arguments:
+        predicate_library: PredicateLibraryBase -- predicate library class used
+                                                   for defining the preconditions
+                                                   of the action
+        state_update_fn: Callable -- function that predictively applies sampled parameters
+                                     so that the preconditions can be verified
+        failure_search_params: FailureSearchParams -- parameters used for guiding the
+                                                      process of searching for failure diagnoses
+        mode: str -- qualitative mode under which the action is executed (default None)
+        diagnosis_repetition_count: int -- number of times to generate model violations (default 10)
+        diagnosis_candidate_confidence: float -- confidence value for determining that
+                                                 model violations are likely failure
+                                                 diagnoses (default 0.8)
+        correction_sample_count: int (default 1000)
+
+        '''
+        (diagnosis_candidates, falsifying_state_update) = self.get_likely_diagnoses(predicate_library,
+                                                                                    state_update_fn,
+                                                                                    failure_search_params,
+                                                                                    mode,
+                                                                                    diagnosis_repetition_count,
+                                                                                    diagnosis_candidate_confidence,
+                                                                                    **kwargs)
+
+        precondition_values = None
+        if mode is not None:
+            precondition_values = [p[2] for p in self.preconditions[mode]]
+        else:
+            precondition_values = [p[2] for p in self.preconditions]
+
+        # we generate state update candidates by moving in the parameter direction
+        # opposite the one of the falsification; the samples are generated from a
+        # Gamma distribution scaled by the parameter update that falsifies
+        # a predicate and shaped by an arbitrary number
+        correction_samples = np.zeros((correction_sample_count, len(falsifying_state_update)))
+        for candidate in diagnosis_candidates:
+            parameter_cause = MetaPredicateData.get_predicate_parameter_cause(predicate_library,
+                                                                              candidate)
+            parameter_cause_idx = self.parameter_idx_mappings[parameter_cause]
+
+            gamma_samples = np.random.gamma(shape=2.,
+                                            scale=abs(falsifying_state_update[parameter_cause_idx]),
+                                            size=correction_sample_count)
+            falsifying_sign = np.sign(falsifying_state_update[parameter_cause_idx])
+            correction_sign = falsifying_sign * -1.
+            correction_samples[:, parameter_cause_idx] = gamma_samples * correction_sign
+
+        # we filter out the samples that do not satisfy the preconditions;
+        # we use the GP to calculate the success probabilities (and the
+        # uncertainties) of the samples that do
+        filtered_samples = []
+        sample_success_likelihoods = []
+        sample_success_uncertainties = []
+        for sample in correction_samples:
+            updated_state = state_update_fn(sample, **kwargs)
+
+            if mode is not None:
+                predicate_values = [int(getattr(predicate_library, precondition[0])(**updated_state))
+                                    for precondition in self.preconditions[mode]]
+            else:
+                predicate_values = [int(getattr(predicate_library, precondition[0])(**updated_state))
+                                    for precondition in self.preconditions]
+
+            if np.allclose(precondition_values, predicate_values):
+                success_p, std = self.gpr.predict(sample.reshape(1,-1), return_std=True)
+                filtered_samples.append(sample)
+                sample_success_likelihoods.append(success_p)
+                sample_success_uncertainties.append(std)
+
+        # we return the sample with the highest predicted success
+        # as a corrected execution sample, or a zero array
+        # of the samples survived the filtering stage
+        if not filtered_samples: return (diagnosis_candidates, np.zeros(len(falsifying_state_update)))
+
+        max_weight_idx = np.argmax(sample_success_likelihoods)
+        return (diagnosis_candidates, filtered_samples[max_weight_idx])
