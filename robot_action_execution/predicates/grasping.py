@@ -4,7 +4,7 @@ from action_execution.geometry.bbox import BBox3
 from robot_action_execution.predicates.predicate_utils import PredicateLibraryBase
 
 class GraspingPredicateLibrary(PredicateLibraryBase):
-    relation_names = ['in_front_of_x', 'behind_x',
+    relation_names = ['in_front_of_x', 'far_in_front_of_x', 'behind_x',
                       'in_front_of_y', 'behind_y',
                       'above', 'below', 'centered_along_x',
                       'centered_along_y', 'centered_along_z']
@@ -12,6 +12,10 @@ class GraspingPredicateLibrary(PredicateLibraryBase):
     @staticmethod
     def in_front_of_x(pose: Pose3, b_box: BBox3) -> bool:
         return pose.position.x < b_box.min.x
+
+    @staticmethod
+    def far_in_front_of_x(pose: Pose3, b_box: BBox3, eps: float=0.05) -> bool:
+        return (pose.position.x < b_box.min.x) and (b_box.min.x - pose.position.x) > eps
 
     @staticmethod
     def behind_x(pose: Pose3, b_box: BBox3) -> bool:
