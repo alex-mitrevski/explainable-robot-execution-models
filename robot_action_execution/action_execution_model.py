@@ -20,7 +20,14 @@ class ActionExecutionModel(object):
     # generated execution samples
     sample_buffer = None
 
-    def __init__(self, name, model_file_path=None):
+    def __init__(self, name,
+                 model_file_path=None):
+        '''
+        Keyword arguments:
+        name: str -- name of the action
+        model_file_path: str -- path of a saved model (default None)
+
+        '''
         self.name = name
         self.sample_buffer = []
         if model_file_path:
@@ -36,12 +43,18 @@ class ActionExecutionModel(object):
     def learn_success_model(self, **kwargs):
         raise NotImplementedError('learn_success_model needs to be overriden')
 
+    def clear_sample_buffer(self):
+        '''Self-explanatory title - clears the sample buffer,
+        thereby refreshing the sample generation.
+        '''
+        self.sample_buffer = []
+
     def sample_state(self, value, predicate_library, state_update_fn,
                      mode=None, use_sample_buffer=True, **kwargs):
         '''Returns a state for which the underlying GP equals "value".
 
         Keyword arguments:
-        value: int -- function value for which an state should be sampled (default 1)
+        value: int -- function value for which an state should be sampled
 
         '''
         state = None
