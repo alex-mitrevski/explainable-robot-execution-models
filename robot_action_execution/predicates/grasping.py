@@ -9,6 +9,15 @@ class GraspingPredicateLibrary(PredicateLibraryBase):
                       'above', 'below', 'centered_along_x',
                       'centered_along_y', 'centered_along_z']
 
+    relation_parameter_causes = {'pose.position.x': ['in_front_of_x', 'far_in_front_of_x', 'behind_x', 'centered_along_x'],
+                                 'pose.position.y': ['in_front_of_y', 'behind_y', 'centered_along_y'],
+                                 'pose.position.z': ['above', 'below', 'centered_along_z']}
+
+    disjoint_predicates = [('in_front_of_x', 'behind_x', 'centered_along_x'),
+                           ('far_in_front_of_x', 'behind_x', 'centered_along_x'),
+                           ('in_front_of_y', 'behind_y', 'centered_along_y'),
+                           ('above', 'below', 'centered_along_z')]
+
     @staticmethod
     def in_front_of_x(pose: Pose3, b_box: BBox3) -> bool:
         return pose.position.x < b_box.min.x
