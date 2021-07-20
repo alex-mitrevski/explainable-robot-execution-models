@@ -16,6 +16,10 @@ class ActionExecutionModel(object):
     # action name
     name = None
 
+    # object class to which the model is applied (class taken from
+    # an ontology if model generalisation to other classes is desired)
+    object_type = None
+
     # action preconditions
     preconditions = None
 
@@ -39,15 +43,17 @@ class ActionExecutionModel(object):
     # as represented by the execution model's Gaussian process
     parameter_idx_mappings = None
 
-    def __init__(self, name: str,
+    def __init__(self, name: str, object_type: str,
                  model_file_path: str=None):
         '''
         Keyword arguments:
         name: str -- name of the action
+        object_type: str -- object type for which the action is applicable
         model_file_path: str -- path of a saved model (default None)
 
         '''
         self.name = name
+        self.object_type = object_type
         self.sample_buffer = []
         if model_file_path:
             self.load(model_file_path)
@@ -181,6 +187,7 @@ class ActionExecutionModel(object):
         with open(model_file_path, 'rb+') as model_file:
             model = pickle.load(model_file)
         self.name = model.name
+        self.object_type = model.object_type
         self.preconditions = model.preconditions
         self.gpr = model.gpr
 

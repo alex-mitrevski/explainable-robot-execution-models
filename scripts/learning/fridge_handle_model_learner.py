@@ -93,7 +93,7 @@ if __name__ == '__main__':
         data_idx += 1
 
     action_parameters = handle_positions - goal_positions
-    execution_model = GraspHandleExecutionModel('fridge-handle-grasp')
+    execution_model = GraspHandleExecutionModel('fridge-handle-grasp', 'FridgeHandle')
 
     print('Learning preconditions...')
     execution_model.learn_preconditions(data_point_count, goal_positions,

@@ -89,7 +89,7 @@ if __name__ == '__main__':
                                    distances_from_edge,
                                    motion_durations))
 
-    execution_model = PullExecutionModel('pull')
+    execution_model = PullExecutionModel('pull', 'YogurtCup')
 
     print('Learning preconditions...')
     execution_model.learn_preconditions(data_point_count, object_positions,
