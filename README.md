@@ -11,13 +11,17 @@
 5. [ICRA 2021 Paper](#ICRA-2021-Paper)
     1. [Data](#Data)
     2. [Execution Failure Diagnosis and Experience Correction](#Execution-Failure-Diagnosis-and-Experience-Correction)
-6. [Robot Experiments](#Robot-Experiments)
-7. [Contributing](#Contributing)
-8. [Notes](#Notes)
+6. [IROS 2021 Paper](#IROS-2021-Paper)
+    1. [Data](#Data)
+    2. [Model Genaralisation Example](#Model-Genaralisation-Example)
+7. [Robot Experiments](#Robot-Experiments)
+8. [Contributing](#Contributing)
+9. [Notes](#Notes)
 
 ## Summary
 
 This repository contains accompanying code for the following papers:
+* `A. Mitrevski, P. G. Plöger, and G. Lakemeyer, "Ontology-Assisted Generalisation of Robot Action Execution Knowledge," in Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2021.`
 * `A. Mitrevski, P. G. Plöger, and G. Lakemeyer, "Robot Action Diagnosis and Experience Correction by Falsifying Parameterised Execution Models," in Proceedings of the IEEE International Conference on Robotics and Automation (ICRA), 2021.`
 * `A. Mitrevski, P. G. Plöger, and G. Lakemeyer, "Representation and Experience-Based Learning of Explainable Models for Robot Action Execution," in Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2020.`
 
@@ -46,6 +50,10 @@ The code in this repository uses `numpy` and `scikit-learn` (specifically, the s
 The data for learning execution models is stored in a MongoDB database in the format described in our [black-box](https://github.com/ropod-project/black-box) repository. The data processing code:
 * depends on [`black-box-tools`](https://github.com/ropod-project/black-box-tools), which provides various utilities for working with MongoDB data
 * uses various data structures defined in [`action-execution`](https://github.com/alex-mitrevski/action-execution)
+
+The ontology-based model generalisation code additionally depends on the [`mas_knowledge_base`](https://github.com/b-it-bots/mas_knowledge_base) package.
+
+Some of the test scripts depend on utility functions defined in [`mas_tools`](https://github.com/b-it-bots/mas_tools) as well as on the ROS messages defined in [`mas_perception_msgs`](https://github.com/b-it-bots/mas_perception_msgs).
 
 ## IROS 2020 Paper
 
@@ -89,9 +97,29 @@ python3 scripts/test/experience_correction.py
 
 This script expects the `drawer_handle_grasping_failures` database to be present, so it is necessary to download the dataset and restore the database first. The script diagnoses the failures in the dataset and suggests corrective execution parameters whenever possible; for illustrative purposes, the original and corrected execution parameters are plotted after parameter correction.
 
+## IROS 2021 Paper
+
+### Data
+
+The data from the experiments in the IROS 2021 paper can also be found [on Zenodo](https://zenodo.org/record/4551725). The dataset includes both learning and generalisation data for all objects used in the experiments and for both actions (grasping and stowing). The grasping dataset also includes images from the robot's hand camera (i) just before approaching the object and (ii) just before grasping.
+
+### Model Genaralisation Example
+
+A test script that illustrates how the model generalisation works during execution of an object grasping action is provided under `scripts/test/ros`:
+
+```
+python3 scripts/test/ros/object_grasping_pose_delta_sampler.py
+```
+
+1. This script creates a ROS node that subscribes to the topic `/get_pose_delta` on which an `mas_perception_msgs/Object` message is published; this includes information about an object to be grasped (such as object type, estimated pose, and bounding box size).
+2. When an object is received, an execution model is selected and action parameters are sampled from the model; in the grasping case, these parameters represent (i) a position offset from the center of the object's bounding box and (ii) a relative wrist orientation (along the xy-plane) with respect to the object's estimated orientation. Once the parameters are sampled, the node publishes:
+    1. a `geometry_msgs/Pose` message with the sampled parameters and
+    2. an `std_msgs/String` message with the object type whose model was used for executing the action
+3. The node also subscribes to the `/success` topic, which is of type `std_msgs.Bool`. The intended use here is that the outcome of the execution is published on this topic (success or failure); when a message is received, the data about the attempted model generalisations are updated (these are stored in a MongoDB database).
+
 ## Robot Experiments
 
-Our experiments were done using [`mas_domestic_robotics`](https://github.com/b-it-bots/mas_domestic_robotics), which contains configurable, robot-independent functionalities tailored at domestic robots. For the handle grasping experiment, we used the [handle opening action](https://github.com/b-it-bots/mas_domestic_robotics/tree/devel/mdr_planning/mdr_actions/mdr_manipulation_actions/mdr_handle_open_action). The [action for pushing/pulling objects](https://github.com/b-it-bots/mas_domestic_robotics/tree/devel/mdr_planning/mdr_actions/mdr_manipulation_actions/mdr_push_pull_object_action) was used for the object pulling experiment.
+Our experiments were done using [`mas_domestic_robotics`](https://github.com/b-it-bots/mas_domestic_robotics), which contains configurable, robot-independent functionalities tailored at domestic robots. For the handle grasping experiment, we used the [handle opening action](https://github.com/b-it-bots/mas_domestic_robotics/tree/devel/mdr_planning/mdr_actions/mdr_manipulation_actions/mdr_handle_open_action). The [action for pushing/pulling objects](https://github.com/b-it-bots/mas_domestic_robotics/tree/devel/mdr_planning/mdr_actions/mdr_manipulation_actions/mdr_push_pull_object_action) was used for the object pulling experiment. The [pickup action](https://github.com/b-it-bots/mas_domestic_robotics/tree/devel/mdr_planning/mdr_actions/mdr_manipulation_actions/mdr_pickup_action) was used for the object grasping experiments, while the [throwing action](https://github.com/b-it-bots/mas_domestic_robotics/tree/devel/mdr_planning/mdr_actions/mdr_manipulation_actions/mdr_place_action) (which is an instance of the placing action) was used for the object stowing experiments.
 
 On the Toyota HSR, which we used for the experiments in the paper, we are still running Ubuntu 16.04 with ROS kinetic, which works best with Python 2.7. The code in this repository, on the other hand, is written for Python 3.5+ (specifically, we use type annotations quite extensively). For bridging the gap between the different versions, we used ROS-based "glue" scripts that were processing requests for execution parameters from the actions and were returning sampled execution parameters. These scripts are not included in this repository, but please get in touch with me if you would like to get access to them.
 
@@ -105,4 +133,5 @@ Contributions in the form of PRs (for example for adding new action models) as w
 * Related to the previous point, this repository is ongoing work and will be updated over time, but:
     * the version used for the IROS 2020 experiments is preserved by the [iros2020](https://github.com/alex-mitrevski/explainable-robot-execution-models/releases/tag/iros2020) tag.
     * the version used for the ICRA 2021 experiments is preserved by the [icra2021](https://github.com/alex-mitrevski/explainable-robot-execution-models/releases/tag/icra2021) tag.
+    * the version used for the IROS 2021 experiments is preserved by the [iros2021](https://github.com/alex-mitrevski/explainable-robot-execution-models/releases/tag/iros2021) tag.
 * The component for learning relational preconditions is reused from [my old implementation](https://github.com/alex-mitrevski/delta-execution-models/blob/master/rule_learner/symblearn/stat_learn.py), but includes some bug fixes.
