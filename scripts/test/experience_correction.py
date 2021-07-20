@@ -112,7 +112,7 @@ if __name__ == '__main__':
         data_idx += 1
 
     action_parameters = handle_positions - goal_positions
-    execution_model = GraspHandleExecutionModel('drawer-handle-grasp')
+    execution_model = GraspHandleExecutionModel('drawer-handle-grasp', 'DrawerHandle')
 
     print('Setting preconditions')
     execution_model.preconditions = preconditions = [('in_front_of_x', ['gripper', 'x'], 1),
