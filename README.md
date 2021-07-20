@@ -23,7 +23,7 @@
 This repository contains accompanying code for the following papers:
 * `A. Mitrevski, P. G. Plöger, and G. Lakemeyer, "Ontology-Assisted Generalisation of Robot Action Execution Knowledge," in Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2021.`
 * `A. Mitrevski, P. G. Plöger, and G. Lakemeyer, "Robot Action Diagnosis and Experience Correction by Falsifying Parameterised Execution Models," in Proceedings of the IEEE International Conference on Robotics and Automation (ICRA), 2021.`
-* `A. Mitrevski, P. G. Plöger, and G. Lakemeyer, "Representation and Experience-Based Learning of Explainable Models for Robot Action Execution," in Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2020.`
+* `A. Mitrevski, P. G. Plöger, and G. Lakemeyer, "Representation and Experience-Based Learning of Explainable Models for Robot Action Execution," in Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), pp. 5641-5647, 2020. Winner of the "Best Paper Award on Cognitive Robotics".`
 
 See below for comments on using execution models on a robot.
 
