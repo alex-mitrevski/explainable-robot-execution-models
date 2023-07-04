@@ -10,7 +10,7 @@ from action_execution.geometry.bbox import BBox3
 from robot_action_execution.action_execution_model import ActionExecutionModel
 from robot_action_execution.predicate_learner import RuleLearner
 from robot_action_execution.predicates.predicate_utils import MetaPredicateData
-from robot_action_execution.predicates.grasping import GraspingPredicateLibrary
+from robot_action_execution.predicates.object_grasping import ObjectGraspingPredicateLibrary
 
 class GraspObjectExecutionModel(ActionExecutionModel):
     def learn_preconditions(self, data_point_count: int,
@@ -42,10 +42,10 @@ class GraspObjectExecutionModel(ActionExecutionModel):
                                  object_bb_mins: np.ndarray,
                                  object_bb_maxs: np.ndarray) -> np.ndarray:
         predicate_values = np.zeros((data_point_count,
-                                     MetaPredicateData.get_predicate_count(GraspingPredicateLibrary)),
+                                     MetaPredicateData.get_predicate_count(ObjectGraspingPredicateLibrary)),
                                     dtype=int)
-        predicates = MetaPredicateData.get_predicates(GraspingPredicateLibrary)
-        predicate_names = MetaPredicateData.get_predicate_names(GraspingPredicateLibrary)
+        predicates = MetaPredicateData.get_predicates(ObjectGraspingPredicateLibrary)
+        predicate_names = MetaPredicateData.get_predicate_names(ObjectGraspingPredicateLibrary)
         for i in range(data_point_count):
             gripper_position = Vector3(x=goal_positions[i,0],
                                        y=goal_positions[i,1],
@@ -85,7 +85,7 @@ class GraspObjectExecutionModel(ActionExecutionModel):
         predicate_strings = [('{0}'.format(p), ['pose', 'b_box'])
                             if p.find('parallel') == -1 and p.find('perpendicular') == -1
                             else ('{0}'.format(p), ['pose', 'object_pose'])
-                            for p in MetaPredicateData.get_predicate_names(GraspingPredicateLibrary)]
+                            for p in MetaPredicateData.get_predicate_names(ObjectGraspingPredicateLibrary)]
         precondition_vector, precondition_values = RuleLearner.learn_rules(predicate_values[success_idx],
                                                                            predicate_acceptance_threshold=0.1)
         preconditions = RuleLearner.extract_preconditions(precondition_vector,
